@@ -27,7 +27,7 @@ class VoteClient(commands.Bot):
         self.default_timer = 24 # by default users have 24 hours to vote on a post
         self.poll_rate = 30 # check for finished posts every 30 seconds
         self.owner_id = 169891281139531776 # owner's discord ID
-        self.james_icon_url = 'https://cdn.discordapp.com/app-icons/232922698441949185/1d0f69cf7e1eced9f8d7b7a9aad86037.png'
+        self.icon_url = 'https://cdn.discordapp.com/app-icons/232922698441949185/1d0f69cf7e1eced9f8d7b7a9aad86037.png'
         self.invite_url = 'https://discord.com/api/oauth2/authorize?client_id=513757460134232069&permissions=126016&scope=bot'
         self.competition = None
 
@@ -363,7 +363,7 @@ async def leaderboard(ctx):
 
     embed = discord.Embed(title=f"{ctx.guild.name} Leaderboards", description=board)
     embed.set_thumbnail(url=ctx.guild.icon_url)
-    embed.set_author(name="james", icon_url=bot.james_icon_url)
+    embed.set_author(name="james", icon_url=bot.icon_url)
     await ctx.send(embed=embed)
 
 @bot.command(hidden=True)
@@ -404,6 +404,7 @@ async def calc_records(ctx):
 async def graph(ctx):
     guild = ctx.guild
     guild_id_str = str(guild.id)
+    guild_transparency_int = int(bot.preferences["transparency"].get(str(guild.id), 0))
     try:
         graph_data = bot.image_scores[guild_id_str]["graph"]
         total_posts = bot.image_scores[guild_id_str]["submitted"]
@@ -444,25 +445,32 @@ async def graph(ctx):
 
         plt.plot(range(total_posts+1), cumulatives[member], label=nick, color=tuple(c/255 for c in member.colour.to_rgb()))
 
+
     legend = plt.legend(framealpha=0)
-    for text in legend.get_texts():
-        text.set_color("white")
 
-    plt.xlabel('Total Submissions', color='white')
-    plt.title(f'Graph of user scores over time', color='white')
-    plt.ylabel('User scores', color='white')
+    if guild_transparency_int:
+        for text in legend.get_texts():
+            text.set_color("white")
 
-    # Whiten
-    ax.spines['bottom'].set_color('white')
-    ax.spines['top'].set_color('white')
-    ax.spines['right'].set_color('white')
-    ax.spines['left'].set_color('white')
-    ax.tick_params(axis='x', colors='white')
-    ax.tick_params(axis='y', colors='white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
+        plt.xlabel('Total Submissions', color='white')
+        plt.title(f'Graph of user scores over time', color='white')
+        plt.ylabel('User scores', color='white')
 
-    plt.savefig('graph.png', transparent=True)
+        # Whiten
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        ax.xaxis.label.set_color('white')
+        ax.yaxis.label.set_color('white')
+    else:
+        plt.xlabel('Total Submissions')
+        plt.title(f'Graph of user scores over time')
+        plt.ylabel('User scores')
+
+    plt.savefig('graph.png', transparent=bool(guild_transparency_int))
     plt.clf()
 
     file = discord.File('graph.png', filename='graph.png')
@@ -590,6 +598,23 @@ async def setchannelerr(ctx, error):
     if isinstance(error, commands.errors.MissingRequiredArgument):
         await ctx.send(f"Please provide a single channel mention to set as the image channel. Example usage: `{command_prefix(bot, ctx.message)}setchannel <channel mention>`")
 
+
+@bot.command(description="Toggle graph transparency", help="Toggle the transparency setting for the graph command; transparency works well in dark mode. Example usage: `<prefix>transparency`")
+async def transparency(ctx):
+    if has_general_permission(ctx.author):
+        current_transparency = bot.preferences["transparency"].get(str(ctx.guild.id), 0)
+        new_transparency = int(not current_transparency)
+        bot.preferences["transparency"][str(ctx.guild.id)] = new_transparency
+        await ctx.send(f"OK, graph transparency {'enabled' if new_transparency else 'disabled'}.")
+        await bot.save(bot.preferences, 'preferences.json')
+    else:
+        await ctx.send("Sorry, you don't have permission to do that.")
+
+@transparency.error
+async def transparencyerror(ctx, error):
+    print(f"Transparency error: ", error)
+    pass
+
 @bot.command(description="Choose how long users will have to vote on submissions",
              help="Provide a single value for the duration in hours users will be able to vote on an image after it is posted. Example usage: `<prefix>settime 24`")
 async def settime(ctx, arg : float):
@@ -685,7 +710,7 @@ async def help(ctx, arg=None):
                 name = command.name
                 help_emb.add_field(name=prefix+name, value=command.description, inline=False)
 
-        help_emb.set_thumbnail(url=bot.james_icon_url)
+        help_emb.set_thumbnail(url=bot.icon_url)
         await ctx.send(embed=help_emb)
 
     else:
